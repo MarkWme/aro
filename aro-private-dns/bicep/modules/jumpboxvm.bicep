@@ -161,6 +161,25 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-03-01' = {
   }
 }
 
+resource vmExtensions 'Microsoft.Compute/virtualMachines/extensions@2022-11-01' = {
+  name: '${name}-vm-extensions'
+  location: location
+  parent: vm
+  properties: {
+    publisher: 'Microsoft.Compute'
+    type: 'CustomScriptExtension'
+    typeHandlerVersion: '1.10'
+    autoUpgradeMinorVersion: true
+    settings: {
+      fileUris: [
+        'https://raw.githubusercontent.com/MarkWme/aro/main/aro-private-dns/ps/wsl.ps1'
+      ]
+      commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File wsl.ps1'
+    }
+  }
+}
+
+/*
 resource vmWslInstall 'Microsoft.Compute/virtualMachines/runCommands@2022-11-01' = {
   name: '${name}-vm-wsl-runCommand'
   location: location
@@ -191,3 +210,4 @@ resource vmReboot 'Microsoft.Compute/virtualMachines/runCommands@2022-11-01' = {
     vmWslInstall
   ]
 }
+*/
