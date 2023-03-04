@@ -101,6 +101,9 @@ resource vmNic 'Microsoft.Network/networkInterfaces@2022-05-01' = {
           privateIPAllocationMethod: 'Dynamic'
           publicIPAddress: {
             id: vmPublicIp.id
+            properties: {
+              deleteOption: 'Delete'
+            }
           }
           subnet: {
             id: subnetId
@@ -108,6 +111,7 @@ resource vmNic 'Microsoft.Network/networkInterfaces@2022-05-01' = {
         }
       }
     ]
+
   }
 }
 
@@ -135,12 +139,14 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-03-01' = {
         managedDisk: {
           storageAccountType: 'StandardSSD_LRS'
         }
+        deleteOption: 'Delete'
       }
       dataDisks: [
         {
           diskSizeGB: 1023
           lun: 0
           createOption: 'Empty'
+          deleteOption: 'Delete'
         }
       ]
     }
@@ -148,6 +154,9 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-03-01' = {
       networkInterfaces: [
         {
           id: vmNic.id
+          properties: {
+            deleteOption: 'Delete'
+          }
         }
       ]
     }
@@ -161,6 +170,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-03-01' = {
   }
 }
 
+/*
 resource vmExtensions 'Microsoft.Compute/virtualMachines/extensions@2022-11-01' = {
   name: '${name}-vm-extensions'
   location: location
@@ -178,24 +188,40 @@ resource vmExtensions 'Microsoft.Compute/virtualMachines/extensions@2022-11-01' 
     }
   }
 }
-
-/*
+*/
 resource vmWslInstall 'Microsoft.Compute/virtualMachines/runCommands@2022-11-01' = {
-  name: '${name}-vm-wsl-runCommand'
+  name: '${name}-vm-wsl-rc'
   location: location
   parent: vm
   properties: {
     runAsPassword: adminPassword
     runAsUser: adminUsername
     source: {
-      script: 'wsl --install'
+      script: 'wsl --install --web-download'
     }
     timeoutInSeconds: 600
   }
 }
 
+resource vmRunOnce 'Microsoft.Compute/virtualMachines/runCommands@2022-11-01' = {
+  name: '${name}-vm-runOnce-rc'
+  location: location
+  parent: vm
+  properties: {
+    runAsPassword: adminPassword
+    runAsUser: adminUsername
+    source: {
+      script: 'New-ItemProperty -Path HKLM:\\SOFTWARE\\Microsoft\\Windows\\CurrentVersion\\RunOnce -Name InstallWSL -PropertyType String -Value "wsl --install"'
+    }
+    timeoutInSeconds: 600
+  }
+  dependsOn: [
+    vmWslInstall
+  ]
+}
+
 resource vmReboot 'Microsoft.Compute/virtualMachines/runCommands@2022-11-01' = {
-  name: '${name}-vm-wsl-reboot'
+  name: '${name}-vm-reboot-rc'
   location: location
   parent: vm
   properties: {
@@ -207,7 +233,7 @@ resource vmReboot 'Microsoft.Compute/virtualMachines/runCommands@2022-11-01' = {
     timeoutInSeconds: 600
   }
   dependsOn: [
-    vmWslInstall
+    vmRunOnce
   ]
 }
-*/
+
