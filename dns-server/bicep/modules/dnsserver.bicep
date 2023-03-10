@@ -151,3 +151,4 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-03-01' = {
   }
 }
 
+output dnsServerPublicIp string = vmPublicIp.properties.ipAddress

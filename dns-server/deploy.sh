@@ -36,6 +36,7 @@ sed -i '' -e "s/{privateIpV4Address}/10.${networkNumber}.0.250/g" cloud-init/clo
 sed -i '' -e "s/{networkNumber}/${networkNumber}/g" cloud-init/cloud-init.yaml
 sed -i '' -e "s/{dnsZoneName}/${privateDnsZoneName}/g" cloud-init/cloud-init.yaml
 cloudInitCustomData=$(cat cloud-init/cloud-init.yaml | base64)
+rm cloud-init/cloud-init.yaml
 #
 # Create resource group
 #
@@ -43,8 +44,9 @@ az group create -n $name -l $location -o table
 #
 # Deploy resources
 #
+deploymentName=$name-$RANDOM
 az deployment group create \
-    -n $name-$RANDOM \
+    -n $deploymentName \
     -g $name \
     -f ./bicep/main.bicep \
     --parameters \
@@ -54,3 +56,12 @@ az deployment group create \
         networkNumber=$networkNumber \
         customData=$cloudInitCustomData \
     -o table
+
+deploymentStatus=$(az deployment group show -n $deploymentName -g $name --query properties.provisioningState -o tsv)
+
+if [[ $deploymentStatus == "Succeeded" ]]
+then
+    dnsServerPublicIp=$(az deployment group show -n $deploymentName -g $name --query properties.outputs.dnsServerPublicIp.value -o tsv)
+
+    echo -e "\nDeployment complete.\n\nTo test for correct DNS server operation, you can SSH to the DNS server at IP address $dnsServerPublicIp and then query the DNS server using dig ns1.$privateDnsZoneName. and confirm that the response contains the IP address of the DNS server (10.$networkNumber.0.250)."
+fi

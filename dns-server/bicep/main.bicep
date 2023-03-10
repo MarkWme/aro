@@ -82,3 +82,5 @@ module networkSetup 'modules/networkSetup.bicep' = {
     dnsServerVM
   ]
 }
+
+output dnsServerPublicIp string = dnsServerVM.outputs.dnsServerPublicIp
