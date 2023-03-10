@@ -2,13 +2,11 @@
 param name string
 
 param subnetId string
-param virtualNetworkName string
-param subnetName string
-param addressPrefix string
 param networkNumber string
+@secure()
 param adminUser string
+@secure()
 param sshKey string
-param privateDnsZoneName string
 param customData string
 
 @description('Size of the virtual machine.')
@@ -115,7 +113,7 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-03-01' = {
       linuxConfiguration: linuxConfiguration
       customData: customData
     }
-    securityProfile: ((securityType == 'TrustedLaunch') ? securityProfileJson : json('null'))
+    securityProfile: ((securityType == 'TrustedLaunch') ? securityProfileJson : null)
     storageProfile: {
       imageReference: imageReference
       osDisk: {
