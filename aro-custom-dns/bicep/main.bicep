@@ -5,7 +5,11 @@ param location string = resourceGroup().location
 param networkNumber string
 
 @description('Name of the private DNS zone to create')
-param privateDnsZoneName string
+param customDnsZoneName string
+
+param customDnsServers array
+
+param dnsServerVirtualNetworkId string
 
 @description('Pull secret from cloud.redhat.com. The json should be input as a string')
 @secure()
@@ -22,7 +26,7 @@ param jumpboxAdminPassword string
 param uniqueSeed string = '${subscription().subscriptionId}-${resourceGroup().name}'
 param name string = 'aks-${uniqueString(uniqueSeed)}'
 
-param aroDomain string = '${name}.${privateDnsZoneName}'
+param aroDomain string = '${name}.${customDnsZoneName}'
 
 @description('Master Node VM Type')
 param controlPlaneVmSize string = 'Standard_D8s_v3'
@@ -85,19 +89,12 @@ module aroNetwork 'modules/network.bicep' = {
     contribRole: contribRole
     objectId: objectId
     rpObjectId: rpObjectId
+    customDnsServers: customDnsServers
+    dnsServerVirtualNetworkId: dnsServerVirtualNetworkId
   }
 }
 
 /*
-module aroPrivateDNS 'modules/privatedns.bicep' = {
-  name: '${deployment().name}--aroPrivateDNS'
-  params: {
-    name: name
-    privateDnsZoneName: privateDnsZoneName
-    virtualNetworkId: aroNetwork.outputs.virtualNetworkId
-  }
-}
-*/
 module jumpboxVM 'modules/jumpboxvm.bicep' = {
   name: '${deployment().name}--jumpboxVM'
   params: {
@@ -110,20 +107,30 @@ module jumpboxVM 'modules/jumpboxvm.bicep' = {
     virtualNetworkName: aroNetwork.outputs.virtualNetworkName
     subnetName: aroNetwork.outputs.jumpboxSubnetName
   }
+  dependsOn: [
+    aroNetwork
+    firewall
+  ]
 }
 
-/*
 module firewall 'modules/firewall.bicep' = {
   name: '${deployment().name}--firewall'
   params: {
     name: name
     azureFirewallSubnetId: aroNetwork.outputs.firewallSubnetId
     location: location
+    virtualNetworkName: aroNetwork.outputs.virtualNetworkName
+    controlPlaneSubnetName: aroNetwork.outputs.controlPlaneSubnetName
+    controlPlaneAddressPrefix: aroNetwork.outputs.controlPlaneSubnetCidr
+    nodeSubnetName: aroNetwork.outputs.nodeSubnetName
+    nodeAddressPrefix: aroNetwork.outputs.nodeSubnetCidr
   }
+  dependsOn: [
+    aroNetwork
+  ]
 }
-*/
 
-
+/*
 module aroCluster 'modules/aro.bicep' = {
   name: '${deployment().name}--aroCluster'
   params: {

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-# ARO cluster deployment with private networking and DNS
+# ARO cluster deployment with private networking and custom (simulating on-premises) DNS
 #
 # Get the pull secret from https://cloud.redhat.com/openshift/install/azure/aro-provisioned
 #
@@ -15,7 +15,16 @@ adminPassword=$(az keyvault secret show --vault-name $keyVaultName --name adminP
 apiServerVisibility=Private
 ingressVisibility=Private
 
-privateDnsZoneName=private.chipfat.com
+customDnsZoneName=private.chipfat.com
+
+#
+# Note: If there is only a single DNS server, the trailing comma is required
+#
+customDnsServers='("10.5.0.4",)'
+dnsServerVirtualNetwork=dns-kogio-network
+dnsServerResourceGroup=dns-kogio
+
+dnsServerVirtualNetworkId=$(az network vnet show -g $dnsServerResourceGroup -n $dnsServerVirtualNetwork --query id -o tsv)
 
 location=westeurope
 #
@@ -54,7 +63,9 @@ az deployment group create \
     --parameters \
         name=$name \
         networkNumber=$networkNumber \
-        privateDnsZoneName=$privateDnsZoneName \
+        customDnsZoneName=$customDnsZoneName \
+        customDnsServers=$customDnsServers \
+        dnsServerVirtualNetworkId=$dnsServerVirtualNetworkId \
         objectId=$objectId \
         clientId=$clientId \
         clientSecret=$clientSecret \
@@ -76,6 +87,7 @@ password=$(az aro list-credentials --name $name --resource-group $name | jq -r "
 # Get the cluster admin URL
 #
 clusterAdminUrl=$(az aro show --name $name --resource-group $name --query "consoleProfile.url" -o tsv)
+apiUrl=$(az aro show --name $name --resource-group $name --query "apiserverProfile.url" -o tsv)
 
 echo "Cluster username: ${userName}"
 echo "Cluster password: ${password}"

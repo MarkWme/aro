@@ -1,0 +1,93 @@
+#cloud-config
+package_upgrade: true
+packages:
+  - bind9
+write_files:
+  - owner: root:bind
+    path: /etc/bind/named.conf.options
+    content: |
+        options {
+            directory "/var/cache/bind";
+
+            // If there is a firewall between you and nameservers you want
+            // to talk to, you may need to fix the firewall to allow multiple
+            // ports to talk.  See http://www.kb.cert.org/vuls/id/800113
+
+            // If your ISP provided one or more IP addresses for stable
+            // nameservers, you probably want to use them as forwarders.
+            // Uncomment the following block, and insert the addresses replacing
+            // the all-0's placeholder.
+
+            forwarders { 1.1.1.1; 1.0.0.1; };
+
+            querylog yes;
+
+            recursion yes;
+
+            //========================================================================
+            // If BIND logs error messages about the root key being expired,
+            // you will need to update your keys.  See https://www.isc.org/bind-keys
+            //========================================================================
+            dnssec-validation auto;
+
+            auth-nxdomain no;    # conform to RFC1035
+            listen-on-v6 { none; };
+            listen-on port 53 { localhost; {privateIpV4Address}; };
+            allow-query { any; };
+        };
+  - owner: root:bind
+    path: /etc/bind/named.conf.local
+    content: |
+        //
+        // Do any local configuration here
+        //
+
+        // Consider adding the 1918 zones here, if they are not used in your
+        // organization
+        //include "/etc/bind/zones.rfc1918";
+
+        zone "{dnsZoneName}" {
+            type master;
+            file "/etc/bind/zones/forward.{dnsZoneName}";
+        };
+
+        zone "0.{networkNumber}.10.in-addr.arpa" {
+            type master;
+            file "/etc/bind/zones/reverse.{dnsZoneName}";
+        };
+  - owner: root:bind
+    path: /etc/bind/forward.{dnsZoneName}
+    content: |
+        ;
+        ; BIND data file for local loopback interface
+        ;
+        $TTL	604800
+        @	IN	SOA	{dnsZoneName}. root.{dnsZoneName}. (
+                    2		; Serial
+              604800		; Refresh
+                86400		; Retry
+              2419200		; Expire
+              604800 )	; Negative Cache TTL
+        ;
+        @	IN	NS	ns1.{dnsZoneName}.
+        ns1	IN	A	10.{networkNumber}.0.250
+  - owner: root:bind
+    path: /etc/bind/forward.{dnsZoneName}
+    content: |
+        ;
+        ; BIND reverse data file for local loopback interface
+        ;
+        $TTL	604800
+        @	IN	SOA	{dnsZoneName}. root.{dnsZoneName}. (
+                    1		; Serial
+              604800		; Refresh
+                86400		; Retry
+              2419200		; Expire
+              604800 )	; Negative Cache TTL
+        ;
+        @	IN	NS	ns1.{dnsZoneName}.
+        ns1	IN	A	10.{networkNumber}.0.250
+        4	IN	PTR	ns1.{dnsZoneName}
+runcmd:
+  - mkdir -p /etc/bind/zones
+  - /etc/init.d/bind9 restart
