@@ -27,7 +27,7 @@ module dnsNetwork 'modules/network.bicep' = {
   }
 }
 
-module jumpboxVM 'modules/dnsserver.bicep' = {
+module dnsServerVM 'modules/dnsserver.bicep' = {
   name: '${deployment().name}--jumpboxVM'
   params: {
     name: name
@@ -42,4 +42,16 @@ module jumpboxVM 'modules/dnsserver.bicep' = {
     subnetName: dnsNetwork.outputs.dnsServerSubnetName
     customData: customData
   }
+}
+
+module networkConfig 'modules/networkdns.bicep' = {
+  name: '${deployment().name}--dnsNetworkUpdate'
+  params: {
+    name: name
+    location: location
+    networkNumber: networkNumber
+  }
+  dependsOn: [
+    dnsServerVM
+  ]
 }

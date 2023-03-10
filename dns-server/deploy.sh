@@ -35,7 +35,6 @@ sed -i '' -e "s/{dnsZoneName}/${privateDnsZoneName}/g" cloud-init/cloud-init.yam
 
 cloudInitCustomData=$(cat cloud-init/cloud-init.yaml | base64)
 
-
 az group create -n $name -l $location -o table
 
 az deployment group create \

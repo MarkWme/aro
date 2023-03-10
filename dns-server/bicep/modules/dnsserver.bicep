@@ -76,51 +76,6 @@ resource vmPublicIp 'Microsoft.Network/publicIPAddresses@2022-05-01' = {
   }
 }
 
-resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2022-05-01' = {
-  name: '${name}-vm-nsg'
-  location: location
-  properties: {
-    securityRules: [
-      {
-        name: 'ssh'
-        properties: {
-          priority: 1000
-          access: 'Allow'
-          direction: 'Inbound'
-          destinationPortRange: '22'
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          sourceAddressPrefix: '*'
-          destinationAddressPrefix: '*'
-        }
-      }
-      {
-        name: 'dns'
-        properties: {
-          priority: 1100
-          access: 'Allow'
-          direction: 'Inbound'
-          destinationPortRange: '53'
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          sourceAddressPrefix: '*'
-          destinationAddressPrefix: '*'
-        }
-      }
-    ]
-  }
-}
-
-resource dnsServerSubnet 'Microsoft.Network/virtualNetworks/subnets@2022-07-01' = {
-  name: '${virtualNetworkName}/${subnetName}'
-  properties: {
-    addressPrefix: addressPrefix
-    networkSecurityGroup: {
-      id: networkSecurityGroup.id
-    }
-  }
-}
-
 resource vmNic 'Microsoft.Network/networkInterfaces@2022-05-01' = {
   name: '${name}-vm-nic'
   location: location

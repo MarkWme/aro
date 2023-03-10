@@ -86,3 +86,4 @@ write_files:
         4	IN	PTR	ns1.{dnsZoneName}
 runcmd:
   - systemctl restart named
+  - shutdown -r +1
