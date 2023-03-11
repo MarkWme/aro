@@ -1,20 +1,24 @@
 param name string
 param location string
 param networkNumber string
+param hubNetworkName string
+param hubResourceGroupName string
+param routeTableId string
 param contribRole string
 param objectId string
 param rpObjectId string
-param customDnsServers array = []
-param dnsServerVirtualNetworkId string
+param dnsServerPrivateIp string
 
 param virtualNetworkCidr string = '10.${networkNumber}.0.0/16'
 param controlPlaneSubnetCidr string = '10.${networkNumber}.0.0/24'
 param nodeSubnetCidr string = '10.${networkNumber}.1.0/24'
-param jumpboxSubnetCidr string = '10.${networkNumber}.2.0/24'
-param aciSubnetCidr string = '10.${networkNumber}.3.0/24'
-param firewallSubnetCidr string = '10.${networkNumber}.4.0/24'
 
-resource aroVirtualNetwork 'Microsoft.Network/virtualNetworks@2020-05-01' = {
+resource hubNetwork 'Microsoft.Network/virtualNetworks@2022-07-01' existing = {
+  name: hubNetworkName
+  scope: resourceGroup(subscription().subscriptionId, hubResourceGroupName)
+}
+
+resource aroVirtualNetwork 'Microsoft.Network/virtualNetworks@2022-07-01' = {
   name: '${name}-network'
   location: location
   properties: {
@@ -24,8 +28,8 @@ resource aroVirtualNetwork 'Microsoft.Network/virtualNetworks@2020-05-01' = {
       ]
     }
     dhcpOptions: {
-      dnsServers: customDnsServers
-    }     
+      dnsServers: [dnsServerPrivateIp]
+    }
     subnets: [
       {
         name: '${name}-control-subnet'
@@ -36,6 +40,9 @@ resource aroVirtualNetwork 'Microsoft.Network/virtualNetworks@2020-05-01' = {
               service: 'Microsoft.ContainerRegistry'
             }
           ]
+          routeTable: {
+            id: routeTableId
+          }
           privateLinkServiceNetworkPolicies: 'Disabled'
         }
       }
@@ -48,24 +55,9 @@ resource aroVirtualNetwork 'Microsoft.Network/virtualNetworks@2020-05-01' = {
               service: 'Microsoft.ContainerRegistry'
             }
           ]
-        }
-      }
-      {
-        name: '${name}-jumpbox-subnet'
-        properties: {
-          addressPrefix: jumpboxSubnetCidr
-        }
-      }
-      {
-        name: '${name}-aci-subnet'
-        properties: {
-          addressPrefix: aciSubnetCidr
-        }
-      }
-      {
-        name: 'AzureFirewallSubnet'
-        properties: {
-          addressPrefix: firewallSubnetCidr
+          routeTable: {
+            id: routeTableId
+          }
         }
       }
     ]
@@ -77,50 +69,35 @@ resource aroVirtualNetwork 'Microsoft.Network/virtualNetworks@2020-05-01' = {
   resource nodeSubnet 'subnets' existing = {
     name: '${name}-node-subnet'
   }
-
-  resource jumpboxSubnet 'subnets' existing = {
-    name: '${name}-jumpbox-subnet'
-  }
-
-  resource aciSubnet 'subnets' existing = {
-    name: '${name}-aci-subnet'
-  }
-
-  resource firewallSubnet 'subnets' existing = {
-    name: 'AzureFirewallSubnet'
-  }
-
 }
 
 output virtualNetworkId string = aroVirtualNetwork.id
 output controlPlaneSubnetId string = aroVirtualNetwork::controlPlaneSubnet.id
 output nodeSubnetId string = aroVirtualNetwork::nodeSubnet.id
-output jumpboxSubnetId string = aroVirtualNetwork::jumpboxSubnet.id
-output aciSubnetId string = aroVirtualNetwork::aciSubnet.id
-output firewallSubnetId string = aroVirtualNetwork::firewallSubnet.id
-output jumpboxSubnetCidr string = jumpboxSubnetCidr
 output virtualNetworkName string = aroVirtualNetwork.name
-output jumpboxSubnetName string = aroVirtualNetwork::jumpboxSubnet.name
 output controlPlaneSubnetName string = aroVirtualNetwork::controlPlaneSubnet.name
 output nodeSubnetName string = aroVirtualNetwork::nodeSubnet.name
 output controlPlaneSubnetCidr string = controlPlaneSubnetCidr
 output nodeSubnetCidr string = nodeSubnetCidr
 
-resource aroDnsNetworkPeering 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2022-07-01' = {
-  name: '${name}-aro-dns-network-peering'
+resource peerToHub 'Microsoft.Network/virtualNetworks/virtualNetworkPeerings@2022-07-01' = {
+  name: '${name}-hub-peer'
   parent: aroVirtualNetwork
   properties: {
-    allowVirtualNetworkAccess: true
     allowForwardedTraffic: true
     allowGatewayTransit: false
-    useRemoteGateways: false
+    allowVirtualNetworkAccess: true
     remoteVirtualNetwork: {
-      id: dnsServerVirtualNetworkId
+      id: hubNetwork.id
     }
+    remoteVirtualNetworkAddressSpace: {
+      addressPrefixes: hubNetwork.properties.addressSpace.addressPrefixes
+    }
+    useRemoteGateways: false
   }
 }
 
-resource aroVirtualNetworkSPNContributorRole 'Microsoft.Authorization/roleAssignments@2018-09-01-preview' = {
+resource aroVirtualNetworkSPNContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(aroVirtualNetwork.id, objectId, contribRole)
   properties: {
     roleDefinitionId: contribRole
@@ -130,7 +107,7 @@ resource aroVirtualNetworkSPNContributorRole 'Microsoft.Authorization/roleAssign
   scope: aroVirtualNetwork
 }
 
-resource aroVirtualNetworkRPContributorRole 'Microsoft.Authorization/roleAssignments@2020-10-01-preview' = {
+resource aroVirtualNetworkRPContributorRole 'Microsoft.Authorization/roleAssignments@2022-04-01' = {
   name: guid(aroVirtualNetwork.id, rpObjectId, contribRole)
   properties: {
     roleDefinitionId: contribRole

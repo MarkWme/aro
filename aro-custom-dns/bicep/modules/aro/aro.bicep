@@ -25,7 +25,6 @@ resource aroCluster 'Microsoft.RedHatOpenShift/OpenShiftClusters@2020-04-30' = {
   properties: {
     clusterProfile: {
       domain: domain
-      resourceGroupId: '/subscriptions/${subscription().subscriptionId}/resourceGroups/${name}-${location}'
       pullSecret: pullSecret
     }
     networkProfile: {

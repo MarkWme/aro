@@ -1,11 +1,13 @@
 param name string
 param azureFirewallSubnetId string
 param location string
+/*
 param virtualNetworkName string
 param controlPlaneSubnetName string
 param nodeSubnetName string
 param controlPlaneAddressPrefix string
 param nodeAddressPrefix string
+*/
 
 resource publicIpAddress 'Microsoft.Network/publicIPAddresses@2022-01-01' = {
   name: '${name}-fw-public-ip'
@@ -156,6 +158,9 @@ resource routeTable 'Microsoft.Network/routeTables@2022-07-01' = {
   }
 }
 
+output routeTableId string = routeTable.id
+
+/*
 resource controlPlaneSubnet 'Microsoft.Network/virtualNetworks/subnets@2022-07-01' = {
   name: '${virtualNetworkName}/${controlPlaneSubnetName}'
   properties: {
@@ -179,3 +184,5 @@ resource nodeSubnet 'Microsoft.Network/virtualNetworks/subnets@2022-07-01' = {
     controlPlaneSubnet
   ]
 }
+
+*/

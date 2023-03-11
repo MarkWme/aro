@@ -15,7 +15,7 @@ adminPassword=$(az keyvault secret show --vault-name $keyVaultName --name adminP
 apiServerVisibility=Private
 ingressVisibility=Private
 
-privateDnsZoneName=private.chipfat.com
+privateDnsZoneName=private.msazure.dev.test
 
 location=westeurope
 #

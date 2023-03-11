@@ -1,6 +1,7 @@
+@description('Region for the first cluster')
 param location string = resourceGroup().location
 
-@description('Network number. This is used to create a virtual network CIDR of 10.x.0.0/16, where x is the network number.')
+@description('Network number')
 param networkNumber string
 
 @description('Name of the Key Vault that contains the SSH public key and admin user name.')
@@ -12,9 +13,8 @@ param keyVaultResourceGroup string
 @description('Custom data (cloud-init file) to be passed to the VM.')
 param customData string
 
-@description('Name to use for resources.')
-param name string
-
+param uniqueSeed string = '${subscription().subscriptionId}-${resourceGroup().name}'
+param name string = 'aks-${uniqueString(uniqueSeed)}'
 //
 // Get a reference to the Key Vault that contains the SSH public key and admin user name.
 //
@@ -23,11 +23,8 @@ resource keyVault 'Microsoft.KeyVault/vaults@2022-07-01' existing = {
   scope: resourceGroup(keyVaultResourceGroup)
 }
 
-//
-// Deploy the virtual network and subnet
-//
-module dnsNetwork 'modules/network.bicep' = {
-  name: '${deployment().name}--dnsNetwork'
+module hubNetwork 'modules/hub/networkHub.bicep' = {
+  name: '${deployment().name}--network'
   params: {
     name: name
     location: location
@@ -35,17 +32,14 @@ module dnsNetwork 'modules/network.bicep' = {
   }
 }
 
-//
-// Deploy the DNS server VM
-//
-module dnsServerVM 'modules/dnsserver.bicep' = {
+module dnsServer 'modules/hub/dnsserver.bicep' = {
   name: '${deployment().name}--dnsServer'
   params: {
     name: name
     location: location
     adminUser: keyVault.getSecret('adminUser')
     sshKey: keyVault.getSecret('sshKey')
-    subnetId: dnsNetwork.outputs.dnsServerSubnetId
+    subnetId: hubNetwork.outputs.dnsSubnetId
     networkNumber: networkNumber
     customData: customData
   }
@@ -66,7 +60,7 @@ module dnsServerVM 'modules/dnsserver.bicep' = {
 // This module also adds the NSG that's required to allow SSH and DNS traffic. It's added
 // at this point to avoid it being removed when the virtual network configuration is updated.
 //
-module networkSetup 'modules/networkSetup.bicep' = {
+module networkSetup 'modules/hub/networkSetup.bicep' = {
   name: '${deployment().name}--dnsNetworkUpdate'
   params: {
     name: name
@@ -79,8 +73,34 @@ module networkSetup 'modules/networkSetup.bicep' = {
   // package repository.
   //
   dependsOn: [
-    dnsServerVM
+    dnsServer
   ]
 }
 
-output dnsServerPublicIp string = dnsServerVM.outputs.dnsServerPublicIp
+module jumpboxVM 'modules/hub/jumpboxvm.bicep' = {
+  name: '${deployment().name}--jumpboxVM'
+  params: {
+    name: name
+    location: location
+    adminUsername:keyVault.getSecret('adminUser')
+    adminPassword: keyVault.getSecret('adminPassword')
+    subnetId: hubNetwork.outputs.jumpboxSubnetId
+  }
+  dependsOn: [
+    networkSetup
+  ]
+}
+
+module firewall 'modules/hub/firewall.bicep' = {
+  name: '${deployment().name}--firewall'
+  params: {
+    name: name
+    azureFirewallSubnetId: hubNetwork.outputs.firewallSubnetId
+    location: location
+  }
+  dependsOn: [
+    jumpboxVM
+  ]
+}
+
+output routeTableId string = firewall.outputs.routeTableId

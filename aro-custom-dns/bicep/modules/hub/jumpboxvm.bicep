@@ -2,6 +2,7 @@
 param name string
 
 @description('Username for the Virtual Machine.')
+@secure()
 param adminUsername string
 
 @description('Password for the Virtual Machine.')
@@ -10,9 +11,6 @@ param adminUsername string
 param adminPassword string
 
 param subnetId string
-param virtualNetworkName string
-param subnetName string
-param addressPrefix string
 
 @description('Size of the virtual machine.')
 param vmSize string = 'Standard_D2s_v5'
@@ -36,7 +34,7 @@ var securityProfileJson = {
 }
 
 resource storageAccount 'Microsoft.Storage/storageAccounts@2022-05-01' = {
-  name: '${replace(name, '-', '')}bootdiag'
+  name: '${replace(name, '-', '')}winbootdiag'
   location: location
   sku: {
     name: 'Standard_LRS'
@@ -45,7 +43,7 @@ resource storageAccount 'Microsoft.Storage/storageAccounts@2022-05-01' = {
 }
 
 resource vmPublicIp 'Microsoft.Network/publicIPAddresses@2022-05-01' = {
-  name: '${name}-vm-public-ip'
+  name: '${name}-win-vm-public-ip'
   location: location
   sku: {
     name: 'Standard'
@@ -53,50 +51,18 @@ resource vmPublicIp 'Microsoft.Network/publicIPAddresses@2022-05-01' = {
   properties: {
     publicIPAllocationMethod: 'Static'
     dnsSettings: {
-      domainNameLabel: '${name}-vm'
-    }
-  }
-}
-
-resource networkSecurityGroup 'Microsoft.Network/networkSecurityGroups@2022-05-01' = {
-  name: '${name}-vm-nsg'
-  location: location
-  properties: {
-    securityRules: [
-      {
-        name: 'default-allow-3389'
-        properties: {
-          priority: 1000
-          access: 'Allow'
-          direction: 'Inbound'
-          destinationPortRange: '3389'
-          protocol: 'Tcp'
-          sourcePortRange: '*'
-          sourceAddressPrefix: '*'
-          destinationAddressPrefix: '*'
-        }
-      }
-    ]
-  }
-}
-
-resource jumpboxSubnet 'Microsoft.Network/virtualNetworks/subnets@2022-07-01' = {
-  name: '${virtualNetworkName}/${subnetName}'
-  properties: {
-    addressPrefix: addressPrefix
-    networkSecurityGroup: {
-      id: networkSecurityGroup.id
+      domainNameLabel: '${name}-win-vm'
     }
   }
 }
 
 resource vmNic 'Microsoft.Network/networkInterfaces@2022-05-01' = {
-  name: '${name}-vm-nic'
+  name: '${name}-win-vm-nic'
   location: location
   properties: {
     ipConfigurations: [
       {
-        name: '${name}-vm-ipconfig'
+        name: '${name}-win-vm-ipconfig'
         properties: {
           privateIPAllocationMethod: 'Dynamic'
           publicIPAddress: {
@@ -116,14 +82,14 @@ resource vmNic 'Microsoft.Network/networkInterfaces@2022-05-01' = {
 }
 
 resource vm 'Microsoft.Compute/virtualMachines@2022-03-01' = {
-  name: '${name}-vm'
+  name: '${name}-win-vm'
   location: location
   properties: {
     hardwareProfile: {
       vmSize: vmSize
     }
     osProfile: {
-      computerName: '${name}-vm'
+      computerName: 'jumpbox'
       adminUsername: adminUsername
       adminPassword: adminPassword
     }
@@ -166,29 +132,10 @@ resource vm 'Microsoft.Compute/virtualMachines@2022-03-01' = {
         storageUri: storageAccount.properties.primaryEndpoints.blob
       }
     }
-    securityProfile: ((securityType == 'TrustedLaunch') ? securityProfileJson : json('null'))
+    securityProfile: ((securityType == 'TrustedLaunch') ? securityProfileJson : null)
   }
 }
 
-/*
-resource vmExtensions 'Microsoft.Compute/virtualMachines/extensions@2022-11-01' = {
-  name: '${name}-vm-extensions'
-  location: location
-  parent: vm
-  properties: {
-    publisher: 'Microsoft.Compute'
-    type: 'CustomScriptExtension'
-    typeHandlerVersion: '1.10'
-    autoUpgradeMinorVersion: true
-    settings: {
-      fileUris: [
-        'https://raw.githubusercontent.com/MarkWme/aro/main/aro-private-dns/ps/wsl.ps1'
-      ]
-      commandToExecute: 'powershell -ExecutionPolicy Unrestricted -File wsl.ps1'
-    }
-  }
-}
-*/
 resource vmWslInstall 'Microsoft.Compute/virtualMachines/runCommands@2022-11-01' = {
   name: '${name}-vm-wsl-rc'
   location: location

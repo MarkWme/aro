@@ -4,29 +4,23 @@ param location string = resourceGroup().location
 @description('Network number')
 param networkNumber string
 
-@description('Name of the private DNS zone to create')
-param customDnsZoneName string
+param hubNetworkName string
+param hubResourceGroupName string
+param routeTableId string
 
-param customDnsServers array
+param privateDnsZoneName string
+param dnsServerPrivateIp string
 
-param dnsServerVirtualNetworkId string
+@description('Name of the Key Vault that contains the SSH public key and admin user name.')
+param keyVaultName string
 
-@description('Pull secret from cloud.redhat.com. The json should be input as a string')
-@secure()
-param pullSecret string
-
-@description('Admin username to be used for the jumpbox VM')
-@secure()
-param jumpboxAdminUser string
-
-@description('Admin password to be used for the jumpbox VM')
-@secure()
-param jumpboxAdminPassword string
+@description('Resource group of the Key Vault that contains the SSH public key and admin user name.')
+param keyVaultResourceGroup string
 
 param uniqueSeed string = '${subscription().subscriptionId}-${resourceGroup().name}'
 param name string = 'aks-${uniqueString(uniqueSeed)}'
 
-param aroDomain string = '${name}.${customDnsZoneName}'
+param aroDomain string = '${name}.${privateDnsZoneName}'
 
 @description('Master Node VM Type')
 param controlPlaneVmSize string = 'Standard_D8s_v3'
@@ -79,9 +73,16 @@ param rpObjectId string
 
 var contribRole = '/subscriptions/${subscription().subscriptionId}/providers/Microsoft.Authorization/roleDefinitions/b24988ac-6180-42a0-ab88-20f7382dd24c'
 
+//
+// Get a reference to the Key Vault that contains the SSH public key and admin user name.
+//
+resource keyVault 'Microsoft.KeyVault/vaults@2022-07-01' existing = {
+  name: keyVaultName
+  scope: resourceGroup(keyVaultResourceGroup)
+}
 
-module aroNetwork 'modules/network.bicep' = {
-  name: '${deployment().name}--aroNetwork'
+module network 'modules/aro/network.bicep' = {
+  name: '${deployment().name}--network'
   params: {
     name: name
     location: location
@@ -89,60 +90,36 @@ module aroNetwork 'modules/network.bicep' = {
     contribRole: contribRole
     objectId: objectId
     rpObjectId: rpObjectId
-    customDnsServers: customDnsServers
-    dnsServerVirtualNetworkId: dnsServerVirtualNetworkId
+    hubNetworkName: hubNetworkName
+    hubResourceGroupName: hubResourceGroupName
+    routeTableId: routeTableId
+    dnsServerPrivateIp: dnsServerPrivateIp
   }
 }
 
-/*
-module jumpboxVM 'modules/jumpboxvm.bicep' = {
-  name: '${deployment().name}--jumpboxVM'
+module peering 'modules/aro/peering.bicep' = {
+  name: '${deployment().name}--peering'
+  scope: resourceGroup(hubResourceGroupName)
   params: {
     name: name
-    location: location
-    adminUsername: jumpboxAdminUser
-    adminPassword: jumpboxAdminPassword
-    subnetId: aroNetwork.outputs.jumpboxSubnetId
-    addressPrefix: aroNetwork.outputs.jumpboxSubnetCidr
-    virtualNetworkName: aroNetwork.outputs.virtualNetworkName
-    subnetName: aroNetwork.outputs.jumpboxSubnetName
+    aroNetworkName: network.outputs.virtualNetworkName
+    aroResourceGroupName: resourceGroup().name
+    hubNetworkName: hubNetworkName
   }
-  dependsOn: [
-    aroNetwork
-    firewall
-  ]
 }
 
-module firewall 'modules/firewall.bicep' = {
-  name: '${deployment().name}--firewall'
-  params: {
-    name: name
-    azureFirewallSubnetId: aroNetwork.outputs.firewallSubnetId
-    location: location
-    virtualNetworkName: aroNetwork.outputs.virtualNetworkName
-    controlPlaneSubnetName: aroNetwork.outputs.controlPlaneSubnetName
-    controlPlaneAddressPrefix: aroNetwork.outputs.controlPlaneSubnetCidr
-    nodeSubnetName: aroNetwork.outputs.nodeSubnetName
-    nodeAddressPrefix: aroNetwork.outputs.nodeSubnetCidr
-  }
-  dependsOn: [
-    aroNetwork
-  ]
-}
-
-/*
-module aroCluster 'modules/aro.bicep' = {
+module aroCluster 'modules/aro/aro.bicep' = {
   name: '${deployment().name}--aroCluster'
   params: {
     name: name
     location: location
-    controlPlaneSubnetId: aroNetwork.outputs.controlPlaneSubnetId
-    nodeSubnetId: aroNetwork.outputs.nodeSubnetId
+    controlPlaneSubnetId: network.outputs.controlPlaneSubnetId
+    nodeSubnetId: network.outputs.nodeSubnetId
     clientId: clientId
     clientSecret: clientSecret
     apiServerVisibility: apiServerVisibility
     ingressVisibility: ingressVisibility
-    pullSecret: pullSecret
+    pullSecret: keyVault.getSecret('redHatPullSecret')
     controlPlaneVmSize: controlPlaneVmSize
     nodeVmSize: nodeVmSize
     nodeVmDiskSize: nodeVmDiskSize
@@ -152,16 +129,3 @@ module aroCluster 'modules/aro.bicep' = {
     serviceCidr: serviceCidr
   }
 }
-
-/*
-module aroPrivateDNSRecords 'modules/arodnsrecords.bicep' = {
-  name: '${deployment().name}--aroPrivateDNSRecords'
-  params: {
-    name: name
-    privateDnsZoneName: privateDnsZoneName
-    aroApiServerIp: aroCluster.outputs.apiServerIp
-    aroIngressIp: aroCluster.outputs.ingressIp
-  }
-}
-
-*/
