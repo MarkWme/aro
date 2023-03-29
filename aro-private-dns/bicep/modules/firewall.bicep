@@ -88,5 +88,9 @@ resource firewall 'Microsoft.Network/azureFirewalls@2021-03-01' = {
     firewallPolicy: {
       id: firewallPolicy.id
     }
+    sku: {
+      name: 'AZFW_VNet'
+      tier: 'Basic'
+    }
   }
 }
